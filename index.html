@@ -11,7 +11,7 @@
 body{margin:0;background:var(--bg);color:var(--fg);font:16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
 main{position:relative;width:100vw;height:100vh;height:100dvh;min-height:300px;isolation:isolate}
 .stage{position:absolute;inset:0;overflow:hidden}
-.ball{position:absolute;left:50%;top:50%;width:28px;height:28px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px #6fe3d155;transform:translate(-50%,-50%);will-change:left;pointer-events:none}
+.ball{position:absolute;left:50%;top:50%;width:112px;height:112px;border-radius:50%;background:var(--accent);box-shadow:0 0 30px #6fe3d155;transform:translate(-50%,-50%);will-change:left;pointer-events:none}
 .status{position:absolute;top:max(24px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);color:var(--muted);font-size:13px;letter-spacing:.06em;white-space:nowrap;text-align:center;opacity:.8}
 .controls{position:absolute;bottom:max(30px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;transition:opacity .3s;z-index:2}
 button{cursor:pointer;appearance:none;border:1px solid #455368;border-radius:50px;background:#1c2a3c;color:var(--fg);padding:12px 20px;font:inherit;min-width:92px}
@@ -19,7 +19,7 @@ button.primary{background:var(--accent);color:#092123;border-color:var(--accent)
 button:focus-visible{outline:3px solid white;outline-offset:3px}
 .controls.is-hidden{opacity:0;pointer-events:none}
 .hint{position:absolute;bottom:7px;right:12px;font-size:11px;color:#8192a5;opacity:.6}
-@media(max-width:550px){.ball{width:23px;height:23px}.controls{gap:7px}button{font-size:13px;min-width:70px;padding:11px 12px}}
+@media(max-width:550px){.ball{width:92px;height:92px}.controls{gap:7px}button{font-size:13px;min-width:70px;padding:11px 12px}}
 </style>
 </head>
 <body>
