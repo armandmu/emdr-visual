@@ -77,6 +77,14 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 .note{border-left:3px solid var(--accent);padding:11px 14px;background:rgba(111,227,209,.06);border-radius:0 12px 12px 0;color:#bdcbd9;font-size:13px;line-height:1.45;margin-top:22px}
 .brandmark{position:fixed;right:18px;bottom:18px;width:min(180px,26vw);opacity:.88;pointer-events:none;user-select:none}
 .brandmark img{width:100%;height:auto;display:block}
+.brandmark{isolation:isolate}
+.brandmark .brand-ar{
+  position:absolute;left:2.5%;top:23%;width:24%;height:57%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:Georgia,"Times New Roman",serif;font-size:clamp(11px,2.75vw,28px);
+  letter-spacing:-.11em;font-weight:400;color:#071015;
+  line-height:1;pointer-events:none;white-space:nowrap
+}
 .back{position:fixed;left:18px;top:18px;z-index:4;min-width:0;padding:9px 13px;font-size:13px}
 .inline-input{display:flex;gap:10px;flex-wrap:wrap}
 .inline-input input{flex:1;min-width:180px;text-transform:uppercase;letter-spacing:.08em}
@@ -197,6 +205,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
           </button>
         </div>
 
+        <div class="note" style="margin-top:10px">Antes de comenzar, comprueba que «Izquierda» suena solo por el oído izquierdo y «Derecha» solo por el derecho. Si ambos se oyen a la vez en móvil, revisa el audio mono del sistema. En auriculares Bluetooth, una videollamada puede cambiar el perfil de salida a mono.</div>
         <div class="volume">
           <div class="volume-row"><span>Volumen en este dispositivo</span><span id="volumeValue">25%</span></div>
           <input id="volume" type="range" min="0" max="60" value="25" step="1">
@@ -211,7 +220,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     </div>
   </section>
 
-  <div class="brandmark" aria-label="Ángel Rull Psicólogo"><img src="../assets/logo-angel-rull.png" alt=""></div>
+  <div class="brandmark" aria-label="Ángel Rull Psicólogo"><img src="../assets/logo-angel-rull.png" alt=""><span class="brand-ar" aria-hidden="true">AR</span></div>
 </main>
 
 <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
@@ -244,6 +253,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 
   let audioCtx = null;
   let masterGain = null;
+  let stereoInput = null;
+  let stereoOutput = null;
   let loopSource = null;
   let patientElapsed = 0;
   let patientStartedAtEpoch = 0;
@@ -495,7 +506,17 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
       if (!AudioContextCtor) throw new Error('Web Audio no compatible');
       audioCtx = new AudioContextCtor();
       masterGain = audioCtx.createGain();
+      masterGain.channelCount = 2;
+      masterGain.channelCountMode = 'explicit';
       masterGain.gain.value = Number($('volume').value) / 100;
+      // Keep both channels explicitly separated all the way to the device.
+      stereoInput = audioCtx.createChannelSplitter(2);
+      stereoOutput = audioCtx.createChannelMerger(2);
+      stereoInput.channelInterpretation = 'discrete';
+      stereoOutput.channelInterpretation = 'discrete';
+      stereoInput.connect(stereoOutput, 0, 0);
+      stereoInput.connect(stereoOutput, 1, 1);
+      stereoOutput.connect(masterGain);
       masterGain.connect(audioCtx.destination);
     }
     return audioCtx.resume();
@@ -555,7 +576,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     loopSource.loop = true;
     loopSource.loopStart = 0;
     loopSource.loopEnd = built.cycleSec;
-    loopSource.connect(masterGain);
+    loopSource.connect(stereoInput);
 
     const startWhen = audioCtx.currentTime + 0.045;
     const offset = (patientElapsed / 1000) % built.cycleSec;
@@ -603,23 +624,24 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   }
 
   function oneShot(side) {
-    if (!audioCtx || !masterGain) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const pan = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
-    const now = audioCtx.currentTime;
-    osc.frequency.value = 520;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.55, now + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
-    if (pan) {
-      pan.pan.value = side === 'left' ? -1 : 1;
-      osc.connect(gain); gain.connect(pan); pan.connect(masterGain);
-    } else {
-      osc.connect(gain); gain.connect(masterGain);
+    if (!audioCtx || !stereoInput) return;
+    // Use the exact same discrete 2-channel signal path as the actual exercise.
+    // This avoids platform-dependent stereo panner behavior on mobile browsers.
+    const sr = audioCtx.sampleRate;
+    const seconds = 0.15;
+    const frames = Math.ceil(sr * seconds);
+    const buffer = audioCtx.createBuffer(2, frames, sr);
+    const channel = buffer.getChannelData(side === 'left' ? 0 : 1);
+    for (let i = 0; i < frames; i++) {
+      const t = i / sr;
+      const envelope = Math.sin(Math.PI * i / frames) ** 2;
+      channel[i] = Math.sin(2 * Math.PI * 520 * t) * envelope * 0.55;
     }
-    osc.start(now); osc.stop(now + 0.12);
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(stereoInput);
+    source.start();
+    source.onended = () => source.disconnect();
   }
 
   function updatePatientConnection(text, state) {
