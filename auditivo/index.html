@@ -309,6 +309,9 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     try { if (peer) peer.destroy(); } catch (_) {}
     conn = null; peer = null; connected = false;
     stopPatientAudio();
+    if (nativeAudio) { nativeAudio.pause(); nativeAudio.removeAttribute('src'); nativeAudio.load(); nativeAudio = null; }
+    for (const url of nativeUrls.values()) URL.revokeObjectURL(url);
+    nativeUrls.clear();
     stopTherapistMonitor();
     cancelAnimationFrame(raf);
     cancelAnimationFrame(patientRaf);
@@ -556,8 +559,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     str(36,'data'); dv.setUint32(40,totalFrames * 4,true);
     const beepFrames = Math.min(Math.round(0.105 * sr),Math.round(framesPerBeat * 0.35));
     for (let beat = 0; beat < cycles * 2; beat++) {
-      const side = beat % 2;
-      if (channelOnly && channelOnly !== (side === 0 ? 'left':'right')) continue;
+      const side = channelOnly ? (channelOnly === 'left' ? 0 : 1) : beat % 2;
+      if (channelOnly && beat !== 0) continue;
       const offset = beat * framesPerBeat;
       for (let i=0;i<beepFrames;i++) {
         const envelope = Math.sin(Math.PI * (i / beepFrames)) ** 2;
@@ -571,17 +574,29 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   }
 
   function stopNative() {
+    // Preserve the same media element after its first user gesture. Mobile Safari
+    // may refuse remote playback on a newly-created audio element.
     if (nativeAudio) {
       nativeAudio.pause();
-      nativeAudio.removeAttribute('src');
-      nativeAudio.load();
-      nativeAudio = null;
+      nativeAudio.loop = false;
     }
+  }
+
+  function getNativePlayer() {
+    if (!nativeAudio) {
+      nativeAudio = document.createElement('audio');
+      nativeAudio.setAttribute('playsinline', '');
+      nativeAudio.setAttribute('webkit-playsinline', '');
+      nativeAudio.preload = 'auto';
+    }
+    return nativeAudio;
   }
 
   function playNative(mode, fromElapsed) {
     stopNative();
-    const player = new Audio(createWavUrl(mode));
+    const player = getNativePlayer();
+    player.pause();
+    player.src = createWavUrl(mode);
     player.loop = true;
     player.preload = 'auto';
     player.playsInline = true;
@@ -589,12 +604,13 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     const duration = beatSec * 4;
     const seek = (fromElapsed / 1000) % duration;
     player.volume = Number($('volume').value) / 100;
-    nativeAudio = player;
-    player.addEventListener('loadedmetadata', () => {
-      if (nativeAudio === player) {
-        try { player.currentTime = seek; } catch (_) {}
-      }
-    }, {once:true});
+    try { player.currentTime = seek; } catch (_) {
+      player.addEventListener('loadedmetadata', () => {
+        if (nativeAudio === player) {
+          try { player.currentTime = seek; } catch (_) {}
+        }
+      }, {once:true});
+    }
     const promise = player.play();
     if (promise && typeof promise.catch === 'function') {
       promise.catch(() => {
@@ -608,8 +624,13 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   }
 
   async function testNative(side) {
-    if (testAudio) { testAudio.pause(); testAudio = null; }
-    const player = new Audio(createWavUrl('fast', side));
+    if (patientRunning) {
+      $('audioDiagnostic').textContent = 'Para probar cada oído, pausa primero la estimulación.';
+      return;
+    }
+    const player = getNativePlayer();
+    player.pause();
+    player.src = createWavUrl('fast', side);
     testAudio = player;
     player.loop = false;
     player.volume = Number($('volume').value) / 100;
@@ -780,7 +801,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     try {
       if (audioEngine === 'web') await ensureAudio();
       if (audioEngine === 'native') {
-        // Audio must be unlocked by a gesture on mobile. This short test supplies it.
+        // Unlock the persistent player with a user gesture.
         await testNative('left');
       } else oneShot('left');
     } catch (_) {
