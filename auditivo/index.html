@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c1320">
+<title>EMDR · Estimulación auditiva bilateral</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0c1320;--fg:#edf3fa;--muted:#9aaabb;--accent:#6fe3d1;
+  --panel:#1c2a3c;--panel2:#142033;--border:#455368;--danger:#ff8e8e;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font:16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{min-height:100vh;min-height:100dvh}
+button,input,select{font:inherit}
+button,select,input[type="text"]{
+  appearance:none;border:1px solid var(--border);border-radius:50px;background:var(--panel);color:var(--fg);
+  padding:12px 16px
+}
+button{cursor:pointer;min-width:110px}
+button.primary{background:var(--accent);color:#092123;border-color:var(--accent);font-weight:700}
+button.secondary{background:transparent}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid white;outline-offset:3px}
+main{position:relative;min-height:100vh;min-height:100dvh;isolation:isolate;overflow:hidden}
+.screen{min-height:100vh;min-height:100dvh;padding:32px 20px 110px;display:flex;align-items:center;justify-content:center}
+.hidden{display:none!important}
+.card{
+  width:min(760px,100%);background:rgba(28,42,60,.72);border:1px solid var(--border);border-radius:28px;
+  padding:clamp(24px,4vw,42px);box-shadow:0 24px 80px rgba(0,0,0,.22);backdrop-filter:blur(10px)
+}
+.eyebrow{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);font-weight:750;margin-bottom:10px}
+h1{font-size:clamp(28px,5vw,48px);line-height:1.04;margin:0 0 14px}
+h2{font-size:clamp(22px,4vw,32px);margin:0 0 10px}
+p{line-height:1.55;color:#c9d5e2;margin:8px 0 18px}
+.muted{color:var(--muted);font-size:14px}
+.actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.actions.center{justify-content:center}
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:28px}
+.role{
+  text-align:left;border-radius:22px;padding:22px;min-height:142px;background:var(--panel2);border:1px solid var(--border);
+  cursor:pointer;transition:transform .15s,border-color .15s
+}
+.role:hover{transform:translateY(-2px);border-color:#6f829a}
+.role strong{display:block;font-size:20px;margin-bottom:7px}.role span{color:var(--muted);line-height:1.4}
+.statusbar{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:14px;margin:16px 0 22px}
+.dot{width:10px;height:10px;border-radius:50%;background:#6d7d91;box-shadow:0 0 0 4px rgba(109,125,145,.12)}
+.dot.ok{background:var(--accent);box-shadow:0 0 0 4px rgba(111,227,209,.12)}
+.dot.warn{background:#f7c66b;box-shadow:0 0 0 4px rgba(247,198,107,.12)}
+.session-box{background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:18px;margin:18px 0}
+.session-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.code{font:700 24px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;color:var(--accent)}
+.link{
+  flex:1;min-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#b7c5d5;font-size:13px;
+  border:1px solid #33445a;border-radius:12px;padding:10px 12px;background:#0f1928
+}
+.controls-panel{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:end;margin-top:24px}
+.field label{display:block;font-size:13px;color:var(--muted);margin:0 0 7px 4px}
+.field select{width:100%}
+.timer{text-align:center;font-variant-numeric:tabular-nums;font-size:clamp(42px,8vw,76px);font-weight:760;letter-spacing:-.04em;margin:28px 0 4px}
+.timer-label{text-align:center;color:var(--muted);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.headphones{
+  width:150px;height:150px;border-radius:50%;margin:4px auto 22px;border:1px solid var(--border);display:grid;place-items:center;
+  background:radial-gradient(circle at 50% 45%,rgba(111,227,209,.18),rgba(20,32,51,.85) 62%);
+  box-shadow:0 0 46px rgba(111,227,209,.1);font-size:66px
+}
+.channel-test{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+.test-btn{border-radius:18px;min-height:76px}
+.test-btn strong{display:block;font-size:20px}.test-btn span{font-size:12px;color:var(--muted)}
+.volume{margin:20px 0}
+.volume-row{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:13px;margin-bottom:8px}
+input[type="range"]{width:100%;accent-color:var(--accent)}
+.patient-state{text-align:center;margin:18px 0 8px;font-size:18px;font-weight:680}
+.patient-state.active{color:var(--accent)}
+.note{border-left:3px solid var(--accent);padding:11px 14px;background:rgba(111,227,209,.06);border-radius:0 12px 12px 0;color:#bdcbd9;font-size:13px;line-height:1.45;margin-top:22px}
+.brandmark{position:fixed;right:18px;bottom:18px;width:min(180px,26vw);opacity:.88;pointer-events:none;user-select:none}
+.brandmark img{width:100%;height:auto;display:block}
+.back{position:fixed;left:18px;top:18px;z-index:4;min-width:0;padding:9px 13px;font-size:13px}
+.inline-input{display:flex;gap:10px;flex-wrap:wrap}
+.inline-input input{flex:1;min-width:180px;text-transform:uppercase;letter-spacing:.08em}
+.error{color:#ffb3b3;font-size:13px;margin-top:10px}
+.pulse-row{display:flex;justify-content:center;gap:30px;margin:22px 0 8px}
+.pulse{
+  width:58px;height:58px;border-radius:50%;border:1px solid var(--border);display:grid;place-items:center;color:#7f91a7;
+  transition:background .08s,color .08s,box-shadow .08s,border-color .08s;font-weight:800
+}
+.pulse.on{background:var(--accent);color:#092123;border-color:var(--accent);box-shadow:0 0 30px rgba(111,227,209,.35)}
+@media(max-width:620px){
+  .screen{align-items:flex-start;padding-top:74px}
+  .role-grid{grid-template-columns:1fr}
+  .controls-panel{grid-template-columns:1fr}
+  .actions button{flex:1}
+  .brandmark{width:min(130px,34vw);right:12px;bottom:12px}
+}
+</style>
+</head>
+<body>
+<main>
+  <button id="backBtn" class="back secondary hidden">← Inicio</button>
+
+  <section id="home" class="screen">
+    <div class="card">
+      <div class="eyebrow">EMDR · Herramienta online</div>
+      <h1>Estimulación auditiva bilateral</h1>
+      <p>El sonido se reproduce directamente en los auriculares del paciente. El profesional controla la estimulación desde su propio dispositivo.</p>
+      <div class="role-grid">
+        <button class="role" id="therapistRole">
+          <strong>Soy psicólogo</strong>
+          <span>Crear una sesión, compartir el enlace y controlar ritmo, inicio y pausa.</span>
+        </button>
+        <button class="role" id="patientRole">
+          <strong>Soy paciente</strong>
+          <span>Entrar con el enlace o código de sesión y activar los auriculares.</span>
+        </button>
+      </div>
+      <div id="patientCodeBox" class="session-box hidden">
+        <div class="muted" style="margin-bottom:9px">Código de sesión</div>
+        <div class="inline-input">
+          <input id="patientCodeInput" type="text" maxlength="12" placeholder="Ej. 7K4M2Q9P" autocomplete="off">
+          <button id="patientCodeGo" class="primary">Continuar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="therapist" class="screen hidden">
+    <div class="card">
+      <div class="eyebrow">Modo psicólogo</div>
+      <h2>Control de la sesión</h2>
+      <div class="statusbar"><span id="therapistDot" class="dot warn"></span><span id="therapistStatus">Preparando sesión…</span></div>
+
+      <div class="session-box">
+        <div class="muted">Código para esta sesión</div>
+        <div class="session-row" style="margin:5px 0 12px">
+          <div id="sessionCode" class="code">—</div>
+          <button id="copyCode" class="secondary">Copiar código</button>
+        </div>
+        <div class="muted">Enlace directo para el paciente</div>
+        <div class="session-row" style="margin-top:7px">
+          <div id="patientLink" class="link">—</div>
+          <button id="copyLink" class="primary">Copiar enlace</button>
+        </div>
+      </div>
+
+      <div class="controls-panel">
+        <div class="field">
+          <label for="mode">Velocidad de estimulación</label>
+          <select id="mode">
+            <option value="fast">Rápida · 1,7×</option>
+            <option value="slow">Lenta · 0,8×</option>
+          </select>
+        </div>
+        <button id="play" class="primary" disabled>Iniciar</button>
+      </div>
+
+      <div class="timer" id="therapistTimer">60:00</div>
+      <div class="timer-label">tiempo restante</div>
+      <div class="pulse-row" aria-hidden="true"><div id="pulseL" class="pulse">L</div><div id="pulseR" class="pulse">R</div></div>
+
+      <div class="actions center" style="margin-top:22px">
+        <button id="reset">Reiniciar</button>
+      </div>
+
+      <div class="note">El paciente debe activar el audio una vez en su navegador. Después, tú puedes iniciar, pausar, continuar o cambiar el ritmo desde aquí.</div>
+    </div>
+  </section>
+
+  <section id="patient" class="screen hidden">
+    <div class="card">
+      <div class="eyebrow">Modo paciente</div>
+      <div class="headphones" aria-hidden="true">🎧</div>
+      <h2 style="text-align:center">Conecta tus auriculares</h2>
+      <p style="text-align:center">El sonido se reproducirá en este dispositivo, alternando entre el oído izquierdo y el derecho.</p>
+
+      <div id="patientPreConnect">
+        <div class="session-box">
+          <div class="muted" style="margin-bottom:9px">Sesión</div>
+          <div id="patientSessionDisplay" class="code">—</div>
+        </div>
+        <div class="actions center">
+          <button id="activateAudio" class="primary">Activar audio y conectar</button>
+        </div>
+        <div id="patientError" class="error" style="text-align:center"></div>
+      </div>
+
+      <div id="patientConnected" class="hidden">
+        <div class="statusbar" style="justify-content:center"><span id="patientDot" class="dot warn"></span><span id="patientStatus">Conectando…</span></div>
+
+        <div class="channel-test">
+          <button id="testLeft" class="test-btn">
+            <strong>Izquierda</strong><span>Probar canal L</span>
+          </button>
+          <button id="testRight" class="test-btn">
+            <strong>Derecha</strong><span>Probar canal R</span>
+          </button>
+        </div>
+
+        <div class="volume">
+          <div class="volume-row"><span>Volumen en este dispositivo</span><span id="volumeValue">25%</span></div>
+          <input id="volume" type="range" min="0" max="60" value="25" step="1">
+        </div>
+
+        <div id="patientState" class="patient-state">En espera del profesional</div>
+        <div class="timer" id="patientTimer">60:00</div>
+        <div class="timer-label" id="patientModeLabel">Rápida · 1,7×</div>
+
+        <div class="note">Mantén esta página abierta durante el ejercicio. Puedes usar la videollamada en otra ventana. Si dejas de oír el sonido, vuelve aquí y comprueba que el navegador no haya silenciado la pestaña.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="brandmark" aria-label="Ángel Rull Psicólogo"><img src="../assets/logo-angel-rull.png" alt=""></div>
+</main>
+
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  const DURATION_MS = 60 * 60 * 1000;
+  const MODES = {
+    fast: { label: 'Rápida · 1,7×', cyclesPerMs: 20.5 / 31000 },
+    slow: { label: 'Lenta · 0,8×', cyclesPerMs: 4 / (31000 * 4 / (12 * 0.8)) }
+  };
+
+  const $ = id => document.getElementById(id);
+  const home = $('home'), therapist = $('therapist'), patient = $('patient'), backBtn = $('backBtn');
+  const qp = new URLSearchParams(location.search);
+
+  let peer = null;
+  let conn = null;
+  let role = null;
+  let session = '';
+  let connected = false;
+
+  let modeKey = 'fast';
+  let elapsed = 0;
+  let startedAtEpoch = 0;
+  let running = false;
+  let completed = false;
+  let raf = 0;
+
+  let audioCtx = null;
+  let masterGain = null;
+  let loopSource = null;
+  let patientElapsed = 0;
+  let patientStartedAtEpoch = 0;
+  let patientRunning = false;
+  let patientModeKey = 'fast';
+  let patientRaf = 0;
+  let monitorTimer = 0;
+
+  function fmt(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  function sanitizeCode(value) {
+    return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+  }
+
+  function makeCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => chars[b % chars.length]).join('');
+  }
+
+  function therapistPeerId(code) {
+    return 'emdr-audio-' + code.toLowerCase();
+  }
+
+  function showScreen(which) {
+    home.classList.toggle('hidden', which !== 'home');
+    therapist.classList.toggle('hidden', which !== 'therapist');
+    patient.classList.toggle('hidden', which !== 'patient');
+    backBtn.classList.toggle('hidden', which === 'home');
+  }
+
+  function cleanupConnection() {
+    try { if (conn) conn.close(); } catch (_) {}
+    try { if (peer) peer.destroy(); } catch (_) {}
+    conn = null; peer = null; connected = false;
+    stopPatientAudio();
+    stopTherapistMonitor();
+    cancelAnimationFrame(raf);
+    cancelAnimationFrame(patientRaf);
+  }
+
+  function goHome() {
+    cleanupConnection();
+    history.replaceState({}, '', location.pathname);
+    role = null; session = ''; running = false; completed = false; elapsed = 0;
+    showScreen('home');
+  }
+
+  backBtn.addEventListener('click', goHome);
+
+  function copyText(value, button) {
+    const original = button.textContent;
+    const done = () => {
+      button.textContent = 'Copiado';
+      setTimeout(() => button.textContent = original, 1300);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(value).then(done).catch(() => fallbackCopy(value, done));
+    } else fallbackCopy(value, done);
+  }
+
+  function fallbackCopy(value, done) {
+    const ta = document.createElement('textarea');
+    ta.value = value; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (_) {}
+    ta.remove();
+  }
+
+  function therapistElapsed() {
+    if (!running) return elapsed;
+    return Math.min(DURATION_MS, elapsed + (Date.now() - startedAtEpoch));
+  }
+
+  function send(payload) {
+    if (conn && conn.open) {
+      try { conn.send(payload); } catch (_) {}
+    }
+  }
+
+  function sendSnapshot() {
+    send({
+      type: 'state',
+      mode: modeKey,
+      running,
+      completed,
+      elapsed: therapistElapsed(),
+      duration: DURATION_MS
+    });
+  }
+
+  function updateTherapistConnection(text, state) {
+    $('therapistStatus').textContent = text;
+    $('therapistDot').className = 'dot ' + (state || 'warn');
+    $('play').disabled = !connected;
+  }
+
+  function startTherapist(code) {
+    role = 'therapist';
+    session = sanitizeCode(code || makeCode()) || makeCode();
+    showScreen('therapist');
+    history.replaceState({}, '', location.pathname + '?role=therapist&session=' + encodeURIComponent(session));
+
+    $('sessionCode').textContent = session;
+    const patientUrl = location.origin + location.pathname + '?role=patient&session=' + encodeURIComponent(session);
+    $('patientLink').textContent = patientUrl;
+    $('copyCode').onclick = () => copyText(session, $('copyCode'));
+    $('copyLink').onclick = () => copyText(patientUrl, $('copyLink'));
+
+    updateTherapistConnection('Esperando al paciente…', 'warn');
+
+    if (typeof Peer === 'undefined') {
+      updateTherapistConnection('No se ha podido cargar el servicio de conexión.', '');
+      return;
+    }
+
+    peer = new Peer(therapistPeerId(session), { debug: 0 });
+
+    peer.on('open', () => {
+      updateTherapistConnection('Sesión lista · esperando al paciente…', 'warn');
+    });
+
+    peer.on('connection', incoming => {
+      if (conn && conn.open) {
+        try { conn.close(); } catch (_) {}
+      }
+      conn = incoming;
+
+      conn.on('open', () => {
+        connected = true;
+        updateTherapistConnection('Paciente conectado y listo', 'ok');
+        sendSnapshot();
+      });
+
+      conn.on('data', data => {
+        if (data && data.type === 'audio-ready') {
+          connected = true;
+          updateTherapistConnection('Paciente conectado · audio activado', 'ok');
+          sendSnapshot();
+        }
+      });
+
+      conn.on('close', () => {
+        connected = false;
+        updateTherapistConnection('Paciente desconectado', 'warn');
+        if (running) pauseTherapist(false);
+      });
+
+      conn.on('error', () => {
+        connected = false;
+        updateTherapistConnection('Problema de conexión con el paciente', '');
+      });
+    });
+
+    peer.on('error', err => {
+      if (err && err.type === 'unavailable-id') {
+        cleanupConnection();
+        startTherapist(makeCode());
+        return;
+      }
+      updateTherapistConnection('No se ha podido establecer la conexión', '');
+    });
+
+    renderTherapist();
+  }
+
+  function renderTherapist() {
+    const nowElapsed = therapistElapsed();
+    if (running && nowElapsed >= DURATION_MS) {
+      elapsed = DURATION_MS;
+      running = false;
+      completed = true;
+      sendSnapshot();
+      $('play').textContent = 'Repetir';
+    }
+
+    $('therapistTimer').textContent = fmt(DURATION_MS - Math.min(DURATION_MS, nowElapsed));
+
+    if (running) {
+      const intervalMs = 1 / (2 * MODES[modeKey].cyclesPerMs);
+      const beat = Math.floor(nowElapsed / intervalMs);
+      const leftOn = beat % 2 === 0;
+      $('pulseL').classList.toggle('on', leftOn);
+      $('pulseR').classList.toggle('on', !leftOn);
+      raf = requestAnimationFrame(renderTherapist);
+    } else {
+      $('pulseL').classList.remove('on');
+      $('pulseR').classList.remove('on');
+    }
+  }
+
+  function startTherapistRun() {
+    if (!connected) return;
+    if (completed || elapsed >= DURATION_MS) {
+      elapsed = 0; completed = false;
+    }
+    running = true;
+    startedAtEpoch = Date.now();
+    $('play').textContent = 'Pausar';
+    sendSnapshot();
+    cancelAnimationFrame(raf);
+    renderTherapist();
+  }
+
+  function pauseTherapist(notify = true) {
+    if (!running) return;
+    elapsed = therapistElapsed();
+    running = false;
+    $('play').textContent = 'Continuar';
+    if (notify) sendSnapshot();
+    cancelAnimationFrame(raf);
+    renderTherapist();
+  }
+
+  function resetTherapist() {
+    running = false; completed = false; elapsed = 0;
+    $('play').textContent = 'Iniciar';
+    cancelAnimationFrame(raf);
+    sendSnapshot();
+    renderTherapist();
+  }
+
+  $('play').addEventListener('click', () => running ? pauseTherapist(true) : startTherapistRun());
+  $('reset').addEventListener('click', resetTherapist);
+  $('mode').addEventListener('change', () => {
+    modeKey = $('mode').value;
+    resetTherapist();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (role !== 'therapist') return;
+    if (e.code === 'Space' && !e.repeat && !e.target.matches('select,input,button')) {
+      e.preventDefault();
+      if (!connected) return;
+      running ? pauseTherapist(true) : startTherapistRun();
+    }
+    if (e.code === 'KeyR' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.target.matches('input')) {
+      resetTherapist();
+    }
+  });
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextCtor) throw new Error('Web Audio no compatible');
+      audioCtx = new AudioContextCtor();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = Number($('volume').value) / 100;
+      masterGain.connect(audioCtx.destination);
+    }
+    return audioCtx.resume();
+  }
+
+  function buildBilateralBuffer(mode) {
+    const cfg = MODES[mode];
+    const intervalSec = 1 / (2 * cfg.cyclesPerMs * 1000);
+    const cycleSec = intervalSec * 2;
+    const sr = audioCtx.sampleRate;
+    const frameCount = Math.ceil(cycleSec * sr);
+    const buffer = audioCtx.createBuffer(2, frameCount, sr);
+    const left = buffer.getChannelData(0);
+    const right = buffer.getChannelData(1);
+    const beepSec = Math.min(0.105, intervalSec * 0.35);
+    const beepFrames = Math.max(1, Math.floor(beepSec * sr));
+    const freq = 520;
+    const amp = 0.55;
+
+    function addBeep(channel, startSec) {
+      const start = Math.floor(startSec * sr);
+      for (let i = 0; i < beepFrames && start + i < frameCount; i++) {
+        const t = i / sr;
+        const phase = i / beepFrames;
+        const env = Math.sin(Math.PI * phase) ** 2;
+        channel[start + i] += Math.sin(2 * Math.PI * freq * t) * env * amp;
+      }
+    }
+
+    addBeep(left, 0);
+    addBeep(right, intervalSec);
+    return { buffer, cycleSec };
+  }
+
+  function stopPatientAudio() {
+    if (loopSource) {
+      try { loopSource.stop(); } catch (_) {}
+      try { loopSource.disconnect(); } catch (_) {}
+      loopSource = null;
+    }
+    patientRunning = false;
+    cancelAnimationFrame(patientRaf);
+    $('patientState').classList.remove('active');
+    if ($('patientState')) $('patientState').textContent = connected ? 'En espera del profesional' : 'Conexión interrumpida';
+  }
+
+  function startPatientAudio(fromElapsed, mode) {
+    if (!audioCtx || !masterGain) return;
+    stopPatientAudio();
+    patientModeKey = mode;
+    patientElapsed = Math.max(0, Math.min(DURATION_MS, Number(fromElapsed) || 0));
+    patientStartedAtEpoch = Date.now();
+
+    const built = buildBilateralBuffer(mode);
+    loopSource = audioCtx.createBufferSource();
+    loopSource.buffer = built.buffer;
+    loopSource.loop = true;
+    loopSource.loopStart = 0;
+    loopSource.loopEnd = built.cycleSec;
+    loopSource.connect(masterGain);
+
+    const startWhen = audioCtx.currentTime + 0.045;
+    const offset = (patientElapsed / 1000) % built.cycleSec;
+    loopSource.start(startWhen, offset);
+    const remainingSec = Math.max(0, (DURATION_MS - patientElapsed) / 1000);
+    try { loopSource.stop(startWhen + remainingSec); } catch (_) {}
+
+    patientRunning = true;
+    $('patientState').textContent = 'Estimulación en curso';
+    $('patientState').classList.add('active');
+    $('patientModeLabel').textContent = MODES[mode].label;
+    renderPatientTimer();
+  }
+
+  function renderPatientTimer() {
+    const nowElapsed = patientRunning
+      ? Math.min(DURATION_MS, patientElapsed + (Date.now() - patientStartedAtEpoch))
+      : patientElapsed;
+
+    $('patientTimer').textContent = fmt(DURATION_MS - nowElapsed);
+
+    if (patientRunning && nowElapsed < DURATION_MS) {
+      patientRaf = requestAnimationFrame(renderPatientTimer);
+    } else if (patientRunning) {
+      patientElapsed = DURATION_MS;
+      stopPatientAudio();
+      $('patientState').textContent = 'Ejercicio terminado';
+      $('patientTimer').textContent = '0:00';
+    }
+  }
+
+  function applyRemoteState(data) {
+    if (!data || data.type !== 'state') return;
+    patientModeKey = MODES[data.mode] ? data.mode : 'fast';
+    $('patientModeLabel').textContent = MODES[patientModeKey].label;
+    patientElapsed = Math.max(0, Math.min(DURATION_MS, Number(data.elapsed) || 0));
+
+    if (data.running && !data.completed && patientElapsed < DURATION_MS) {
+      startPatientAudio(patientElapsed, patientModeKey);
+    } else {
+      stopPatientAudio();
+      $('patientTimer').textContent = fmt(DURATION_MS - patientElapsed);
+      $('patientState').textContent = data.completed ? 'Ejercicio terminado' : (patientElapsed > 0 ? 'En pausa' : 'En espera del profesional');
+    }
+  }
+
+  function oneShot(side) {
+    if (!audioCtx || !masterGain) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const pan = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+    const now = audioCtx.currentTime;
+    osc.frequency.value = 520;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.55, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+    if (pan) {
+      pan.pan.value = side === 'left' ? -1 : 1;
+      osc.connect(gain); gain.connect(pan); pan.connect(masterGain);
+    } else {
+      osc.connect(gain); gain.connect(masterGain);
+    }
+    osc.start(now); osc.stop(now + 0.12);
+  }
+
+  function updatePatientConnection(text, state) {
+    $('patientStatus').textContent = text;
+    $('patientDot').className = 'dot ' + (state || 'warn');
+  }
+
+  async function connectPatient(code) {
+    role = 'patient';
+    session = sanitizeCode(code);
+    if (!session) return;
+
+    showScreen('patient');
+    history.replaceState({}, '', location.pathname + '?role=patient&session=' + encodeURIComponent(session));
+    $('patientSessionDisplay').textContent = session;
+    $('patientPreConnect').classList.remove('hidden');
+    $('patientConnected').classList.add('hidden');
+    $('patientError').textContent = '';
+  }
+
+  $('activateAudio').addEventListener('click', async () => {
+    $('patientError').textContent = '';
+    try {
+      await ensureAudio();
+      oneShot('left');
+    } catch (_) {
+      $('patientError').textContent = 'Este navegador no ha podido activar el audio.';
+      return;
+    }
+
+    $('patientPreConnect').classList.add('hidden');
+    $('patientConnected').classList.remove('hidden');
+    updatePatientConnection('Conectando con el profesional…', 'warn');
+
+    if (typeof Peer === 'undefined') {
+      updatePatientConnection('No se ha podido cargar el servicio de conexión', '');
+      return;
+    }
+
+    peer = new Peer(undefined, { debug: 0 });
+
+    peer.on('open', () => {
+      conn = peer.connect(therapistPeerId(session), { reliable: true, metadata: { role: 'patient' } });
+
+      conn.on('open', () => {
+        connected = true;
+        updatePatientConnection('Conectado · esperando indicaciones', 'ok');
+        send({ type: 'audio-ready' });
+      });
+
+      conn.on('data', applyRemoteState);
+
+      conn.on('close', () => {
+        connected = false;
+        stopPatientAudio();
+        updatePatientConnection('Conexión interrumpida', 'warn');
+      });
+
+      conn.on('error', () => {
+        connected = false;
+        stopPatientAudio();
+        updatePatientConnection('Problema de conexión', '');
+      });
+    });
+
+    peer.on('error', err => {
+      connected = false;
+      stopPatientAudio();
+      if (err && err.type === 'peer-unavailable') {
+        updatePatientConnection('No encuentro esa sesión. Comprueba el código o pide un enlace nuevo.', '');
+      } else {
+        updatePatientConnection('No se ha podido establecer la conexión', '');
+      }
+    });
+  });
+
+  $('testLeft').addEventListener('click', async () => { await ensureAudio(); oneShot('left'); });
+  $('testRight').addEventListener('click', async () => { await ensureAudio(); oneShot('right'); });
+  $('volume').addEventListener('input', () => {
+    const value = Number($('volume').value);
+    $('volumeValue').textContent = value + '%';
+    if (masterGain) masterGain.gain.setTargetAtTime(value / 100, audioCtx.currentTime, 0.015);
+  });
+
+  $('therapistRole').addEventListener('click', () => startTherapist(makeCode()));
+  $('patientRole').addEventListener('click', () => $('patientCodeBox').classList.toggle('hidden'));
+  $('patientCodeGo').addEventListener('click', () => connectPatient($('patientCodeInput').value));
+  $('patientCodeInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') connectPatient($('patientCodeInput').value);
+  });
+  $('patientCodeInput').addEventListener('input', e => e.target.value = sanitizeCode(e.target.value));
+
+  function stopTherapistMonitor() {
+    clearInterval(monitorTimer);
+    monitorTimer = 0;
+  }
+
+  window.addEventListener('beforeunload', cleanupConnection);
+
+  const initialRole = qp.get('role');
+  const initialSession = sanitizeCode(qp.get('session'));
+
+  if (initialRole === 'patient' && initialSession) {
+    connectPatient(initialSession);
+  } else if (initialRole === 'therapist') {
+    startTherapist(initialSession || makeCode());
+  } else {
+    showScreen('home');
+  }
+})();
+</script>
+</body>
+</html>
