@@ -206,15 +206,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
         </div>
 
         <div class="note" style="margin-top:10px">Antes de comenzar, comprueba que «Izquierda» suena solo por el oído izquierdo y «Derecha» solo por el derecho. Si ambos se oyen a la vez en móvil, revisa el audio mono del sistema. En auriculares Bluetooth, una videollamada puede cambiar el perfil de salida a mono.</div>
-        <div class="field" style="margin:18px 0 6px">
-          <label for="audioEngine">Motor de audio</label>
-          <select id="audioEngine" style="width:100%">
-            <option value="native">Estéreo nativo (recomendado para móvil)</option>
-            <option value="web">Web Audio (alternativo)</option>
-          </select>
-        </div>
-        <div id="audioDiagnostic" class="muted" style="margin:6px 0 16px" aria-live="polite"></div>
-        <div class="volume" id="volumeControl">
+        <div class="volume">
           <div class="volume-row"><span>Volumen en este dispositivo</span><span id="volumeValue">25%</span></div>
           <input id="volume" type="range" min="0" max="60" value="25" step="1">
         </div>
@@ -270,12 +262,6 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   let patientModeKey = 'fast';
   let patientRaf = 0;
   let monitorTimer = 0;
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  let audioEngine = isMobile ? 'native' : 'web';
-  let nativeAudio = null;
-  let testAudio = null;
-  const nativeUrls = new Map();
-  let desiredRunning = false;
 
   function fmt(ms) {
     const s = Math.max(0, Math.ceil(ms / 1000));
@@ -309,9 +295,6 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     try { if (peer) peer.destroy(); } catch (_) {}
     conn = null; peer = null; connected = false;
     stopPatientAudio();
-    if (nativeAudio) { nativeAudio.pause(); nativeAudio.removeAttribute('src'); nativeAudio.load(); nativeAudio = null; }
-    for (const url of nativeUrls.values()) URL.revokeObjectURL(url);
-    nativeUrls.clear();
     stopTherapistMonitor();
     cancelAnimationFrame(raf);
     cancelAnimationFrame(patientRaf);
@@ -539,119 +522,6 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     return audioCtx.resume();
   }
 
-  // Native HTML audio decodes a standard stereo WAV in the browser media pipeline.
-  // Unlike Web Audio graphs, this also exercises the phone's actual media output path.
-  function createWavUrl(mode, channelOnly = null) {
-    const key = mode + ':' + (channelOnly || 'both');
-    if (nativeUrls.has(key)) return nativeUrls.get(key);
-    const intervalSec = 1 / (2 * MODES[mode].cyclesPerMs * 1000);
-    const sr = 24000;
-    const cycles = channelOnly ? 1 : 2;
-    const framesPerBeat = Math.round(intervalSec * sr);
-    const totalFrames = framesPerBeat * cycles * 2;
-    const pcm = new ArrayBuffer(44 + totalFrames * 4);
-    const dv = new DataView(pcm);
-    const str = (pos, value) => { for (let i = 0; i < value.length; i++) dv.setUint8(pos + i, value.charCodeAt(i)); };
-    str(0,'RIFF'); dv.setUint32(4,36 + totalFrames * 4,true); str(8,'WAVE');
-    str(12,'fmt '); dv.setUint32(16,16,true); dv.setUint16(20,1,true);
-    dv.setUint16(22,2,true); dv.setUint32(24,sr,true);
-    dv.setUint32(28,sr * 4,true); dv.setUint16(32,4,true); dv.setUint16(34,16,true);
-    str(36,'data'); dv.setUint32(40,totalFrames * 4,true);
-    const beepFrames = Math.min(Math.round(0.105 * sr),Math.round(framesPerBeat * 0.35));
-    for (let beat = 0; beat < cycles * 2; beat++) {
-      const side = channelOnly ? (channelOnly === 'left' ? 0 : 1) : beat % 2;
-      if (channelOnly && beat !== 0) continue;
-      const offset = beat * framesPerBeat;
-      for (let i=0;i<beepFrames;i++) {
-        const envelope = Math.sin(Math.PI * (i / beepFrames)) ** 2;
-        const value = Math.round(0.52 * envelope * Math.sin(2 * Math.PI * 520 * i / sr) * 32767);
-        dv.setInt16(44 + (offset+i)*4 + side*2,value,true);
-      }
-    }
-    const url = URL.createObjectURL(new Blob([pcm], {type:'audio/wav'}));
-    nativeUrls.set(key,url);
-    return url;
-  }
-
-  function stopNative() {
-    // Preserve the same media element after its first user gesture. Mobile Safari
-    // may refuse remote playback on a newly-created audio element.
-    if (nativeAudio) {
-      nativeAudio.pause();
-      nativeAudio.loop = false;
-    }
-  }
-
-  function getNativePlayer() {
-    if (!nativeAudio) {
-      nativeAudio = document.createElement('audio');
-      nativeAudio.setAttribute('playsinline', '');
-      nativeAudio.setAttribute('webkit-playsinline', '');
-      nativeAudio.preload = 'auto';
-    }
-    return nativeAudio;
-  }
-
-  function playNative(mode, fromElapsed) {
-    stopNative();
-    const player = getNativePlayer();
-    player.pause();
-    player.src = createWavUrl(mode);
-    player.loop = true;
-    player.preload = 'auto';
-    player.playsInline = true;
-    const beatSec = 1 / (2 * MODES[mode].cyclesPerMs * 1000);
-    const duration = beatSec * 4;
-    const seek = (fromElapsed / 1000) % duration;
-    player.volume = Number($('volume').value) / 100;
-    try { player.currentTime = seek; } catch (_) {
-      player.addEventListener('loadedmetadata', () => {
-        if (nativeAudio === player) {
-          try { player.currentTime = seek; } catch (_) {}
-        }
-      }, {once:true});
-    }
-    const promise = player.play();
-    if (promise && typeof promise.catch === 'function') {
-      promise.catch(() => {
-        if (nativeAudio === player) {
-          $('patientState').textContent = 'Audio bloqueado: pulsa «Activar audio» de nuevo';
-          $('patientState').classList.remove('active');
-          $('audioDiagnostic').textContent = 'El navegador exige una nueva interacción para iniciar el sonido.';
-        }
-      });
-    }
-  }
-
-  async function testNative(side) {
-    if (patientRunning) {
-      $('audioDiagnostic').textContent = 'Para probar cada oído, pausa primero la estimulación.';
-      return;
-    }
-    const player = getNativePlayer();
-    player.pause();
-    player.src = createWavUrl('fast', side);
-    testAudio = player;
-    player.loop = false;
-    player.volume = Number($('volume').value) / 100;
-    try {
-      await player.play();
-      $('audioDiagnostic').textContent = 'Prueba ' + (side === 'left' ? 'izquierda' : 'derecha') +
-        ' enviada como archivo estéreo real. Si la oyes en ambos oídos, el teléfono o la salida de audio están mezclando los canales.';
-    } catch (_) {
-      $('audioDiagnostic').textContent = 'El navegador ha bloqueado la prueba de audio. Pulsa de nuevo.';
-    }
-  }
-
-  function configureAudioEngine() {
-    $('audioEngine').value = audioEngine;
-    const native = audioEngine === 'native';
-    $('volumeControl').classList.toggle('hidden', native && /iPhone|iPad|iPod/i.test(navigator.userAgent));
-    $('audioDiagnostic').textContent = native
-      ? 'Audio estéreo nativo. En iPhone, ajusta el volumen con los botones físicos.'
-      : 'Modo Web Audio. Puedes comparar las pruebas de los dos canales.';
-  }
-
   function buildBilateralBuffer(mode) {
     const cfg = MODES[mode];
     const intervalSec = 1 / (2 * cfg.cyclesPerMs * 1000);
@@ -687,7 +557,6 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
       try { loopSource.disconnect(); } catch (_) {}
       loopSource = null;
     }
-    stopNative();
     patientRunning = false;
     cancelAnimationFrame(patientRaf);
     $('patientState').classList.remove('active');
@@ -701,22 +570,19 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     patientElapsed = Math.max(0, Math.min(DURATION_MS, Number(fromElapsed) || 0));
     patientStartedAtEpoch = Date.now();
 
-    if (audioEngine === 'native') {
-      playNative(mode, patientElapsed);
-    } else {
-      const built = buildBilateralBuffer(mode);
-      loopSource = audioCtx.createBufferSource();
-      loopSource.buffer = built.buffer;
-      loopSource.loop = true;
-      loopSource.loopStart = 0;
-      loopSource.loopEnd = built.cycleSec;
-      loopSource.connect(stereoInput);
-      const startWhen = audioCtx.currentTime + 0.045;
-      const offset = (patientElapsed / 1000) % built.cycleSec;
-      loopSource.start(startWhen, offset);
-      const remainingSec = Math.max(0, (DURATION_MS - patientElapsed) / 1000);
-      try { loopSource.stop(startWhen + remainingSec); } catch (_) {}
-    }
+    const built = buildBilateralBuffer(mode);
+    loopSource = audioCtx.createBufferSource();
+    loopSource.buffer = built.buffer;
+    loopSource.loop = true;
+    loopSource.loopStart = 0;
+    loopSource.loopEnd = built.cycleSec;
+    loopSource.connect(stereoInput);
+
+    const startWhen = audioCtx.currentTime + 0.045;
+    const offset = (patientElapsed / 1000) % built.cycleSec;
+    loopSource.start(startWhen, offset);
+    const remainingSec = Math.max(0, (DURATION_MS - patientElapsed) / 1000);
+    try { loopSource.stop(startWhen + remainingSec); } catch (_) {}
 
     patientRunning = true;
     $('patientState').textContent = 'Estimulación en curso';
@@ -799,11 +665,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   $('activateAudio').addEventListener('click', async () => {
     $('patientError').textContent = '';
     try {
-      if (audioEngine === 'web') await ensureAudio();
-      if (audioEngine === 'native') {
-        // Unlock the persistent player with a user gesture.
-        await testNative('left');
-      } else oneShot('left');
+      await ensureAudio();
+      oneShot('left');
     } catch (_) {
       $('patientError').textContent = 'Este navegador no ha podido activar el audio.';
       return;
@@ -855,28 +718,12 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     });
   });
 
-  $('testLeft').addEventListener('click', async () => {
-    if (audioEngine === 'native') await testNative('left');
-    else { await ensureAudio(); oneShot('left'); }
-  });
-  $('testRight').addEventListener('click', async () => {
-    if (audioEngine === 'native') await testNative('right');
-    else { await ensureAudio(); oneShot('right'); }
-  });
-  $('audioEngine').addEventListener('change', () => {
-    const wasRunning = patientRunning;
-    const position = wasRunning ? Math.min(DURATION_MS,patientElapsed + Date.now() - patientStartedAtEpoch) : patientElapsed;
-    stopPatientAudio();
-    audioEngine = $('audioEngine').value;
-    configureAudioEngine();
-    if (wasRunning) startPatientAudio(position,patientModeKey);
-  });
+  $('testLeft').addEventListener('click', async () => { await ensureAudio(); oneShot('left'); });
+  $('testRight').addEventListener('click', async () => { await ensureAudio(); oneShot('right'); });
   $('volume').addEventListener('input', () => {
     const value = Number($('volume').value);
     $('volumeValue').textContent = value + '%';
     if (masterGain) masterGain.gain.setTargetAtTime(value / 100, audioCtx.currentTime, 0.015);
-    if (nativeAudio) nativeAudio.volume = value / 100;
-    if (testAudio) testAudio.volume = value / 100;
   });
 
   $('therapistRole').addEventListener('click', () => startTherapist(makeCode()));
@@ -894,7 +741,6 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 
   window.addEventListener('beforeunload', cleanupConnection);
 
-  configureAudioEngine();
   const initialRole = qp.get('role');
   const initialSession = sanitizeCode(qp.get('session'));
 
