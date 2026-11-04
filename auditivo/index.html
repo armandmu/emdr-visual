@@ -108,6 +108,15 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 <main>
   <button id="backBtn" class="back secondary hidden">← Inicio</button>
 
+  <section id="desktopOnly" class="screen hidden">
+    <div class="card">
+      <div class="eyebrow">EMDR · Estimulación auditiva bilateral</div>
+      <h1>Disponible en ordenador</h1>
+      <p>Para garantizar la alternancia entre el oído izquierdo y el derecho, esta versión está habilitada únicamente para ordenadores.</p>
+      <p>Abre el enlace desde un PC o Mac y conecta unos auriculares estéreo. La versión móvil está pendiente de revisión.</p>
+    </div>
+  </section>
+
   <section id="home" class="screen">
     <div class="card">
       <div class="eyebrow">EMDR · Herramienta online</div>
@@ -740,6 +749,19 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   }
 
   window.addEventListener('beforeunload', cleanupConnection);
+
+  // A conservative gate: mobile phones and tablets cannot start sessions.
+  // Leave the tested desktop playback path untouched.
+  const mobileOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (mobileOrTablet) {
+    $('desktopOnly').classList.remove('hidden');
+    home.classList.add('hidden');
+    therapist.classList.add('hidden');
+    patient.classList.add('hidden');
+    backBtn.classList.add('hidden');
+    return;
+  }
 
   const initialRole = qp.get('role');
   const initialSession = sanitizeCode(qp.get('session'));
