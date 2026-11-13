@@ -74,7 +74,7 @@ p{line-height:1.55;color:#c9d5e2;margin:8px 0 18px}
 .volume{margin:20px 0}
 .volume-row{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:13px;margin-bottom:8px}
 input[type="range"]{width:100%;accent-color:var(--accent)}
-.verify-label{display:flex;align-items:flex-start;gap:11px;background:rgba(111,227,209,.07);padding:14px;border-radius:14px;margin:16px 0;color:#d7e3ec;font-size:14px;line-height:1.45}
+.flex-choice{display:flex;flex-wrap:wrap;gap:10px}.flex-choice button{flex:1;min-width:185px}.verify-label{display:flex;align-items:flex-start;gap:11px;background:rgba(111,227,209,.07);padding:14px;border-radius:14px;margin:16px 0;color:#d7e3ec;font-size:14px;line-height:1.45}
 .verify-label input{width:20px;height:20px;flex-shrink:0;accent-color:var(--accent);margin-top:1px}
 .patient-state{text-align:center;margin:18px 0 8px;font-size:18px;font-weight:680}
 .patient-state.active{color:var(--accent)}
@@ -150,9 +150,16 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     <div class="card">
       <div class="eyebrow">Modo psicólogo</div>
       <h2>Control de la sesión</h2>
+      <div class="session-box">
+        <div class="muted" style="margin-bottom:10px">¿Dónde está el paciente?</div>
+        <div class="flex-choice">
+          <button id="onlineMode" class="primary" aria-pressed="true">Online · Otro dispositivo</button>
+          <button id="localMode" aria-pressed="false">Presencial · Este móvil</button>
+        </div>
+      </div>
       <div class="statusbar"><span id="therapistDot" class="dot warn"></span><span id="therapistStatus">Preparando sesión…</span></div>
 
-      <div class="session-box">
+      <div class="session-box" id="onlineSessionBox">
         <div class="muted">Código para esta sesión</div>
         <div class="session-row" style="margin:5px 0 12px">
           <div id="sessionCode" class="code">—</div>
@@ -163,6 +170,22 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
           <div id="patientLink" class="link">—</div>
           <button id="copyLink" class="primary">Copiar enlace</button>
         </div>
+      </div>
+
+      <div id="localSetup" class="session-box hidden">
+        <div class="eyebrow">Reproducción presencial</div>
+        <p>Conecta los auriculares a este móvil. El paciente escuchará aquí, mientras tú controlas las pausas desde esta pantalla.</p>
+        <div class="channel-test">
+          <button id="localTestLeft" class="test-btn"><strong>Izquierda</strong><span>Comprobar oído L</span></button>
+          <button id="localTestRight" class="test-btn"><strong>Derecha</strong><span>Comprobar oído R</span></button>
+        </div>
+        <label class="verify-label"><input id="localVerified" type="checkbox" disabled> He comprobado que cada sonido se escucha solo por el oído correspondiente.</label>
+        <div class="volume">
+          <div class="volume-row"><span>Volumen de los auriculares</span><span id="localVolumeValue">25%</span></div>
+          <input id="localVolume" type="range" min="0" max="60" value="25" step="1">
+        </div>
+        <div id="localAudioStatus" class="muted" role="status">Prueba primero ambos oídos y confirma la separación estéreo.</div>
+        <div class="note">En iPhone, comprueba que «Audio mono» esté desactivado. Mantén el móvil desbloqueado y esta página abierta mientras dure el ejercicio.</div>
       </div>
 
       <div class="controls-panel">
@@ -184,7 +207,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
         <button id="reset">Reiniciar</button>
       </div>
 
-      <div class="note">El paciente debe activar el audio una vez en su navegador. Después, tú puedes iniciar, pausar, continuar o cambiar el ritmo desde aquí.</div>
+      <div class="note" id="onlineInstructions">El paciente debe activar el audio una vez en su navegador. Después, tú puedes iniciar, pausar, continuar o cambiar el ritmo desde aquí.</div>
     </div>
   </section>
 
@@ -282,6 +305,9 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   let audioTestedRight = false;
   let stereoConfirmed = false;
   let lastRemoteState = null;
+  let localSession = false;
+  let localLeftTested = false, localRightTested = false;
+  let localStereoConfirmed = false;
 
   function fmt(ms) {
     const s = Math.max(0, Math.ceil(ms / 1000));
@@ -323,6 +349,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   function goHome() {
     cleanupConnection();
     history.replaceState({}, '', location.pathname);
+    localSession = false; localStereoConfirmed = false; stereoConfirmed = false;
     role = null; session = ''; running = false; completed = false; elapsed = 0;
     showScreen('home');
   }
@@ -371,15 +398,79 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   }
 
   function updateTherapistConnection(text, state) {
+    if (localSession) return;
     $('therapistStatus').textContent = text;
     $('therapistDot').className = 'dot ' + (state || 'warn');
     $('play').disabled = !connected;
   }
 
+  function renderLocalStatus() {
+    $('therapistStatus').textContent = localStereoConfirmed
+      ? 'Presencial · audio preparado en este móvil'
+      : 'Presencial · comprueba ambos auriculares';
+    $('therapistDot').className = 'dot ' + (localStereoConfirmed ? 'ok' : 'warn');
+    $('play').disabled = !localStereoConfirmed;
+    $('onlineMode').classList.toggle('primary', !localSession);
+    $('onlineMode').setAttribute('aria-pressed', String(!localSession));
+    $('localMode').classList.toggle('primary', localSession);
+    $('localMode').setAttribute('aria-pressed', String(localSession));
+  }
+
+  function enterLocalMode() {
+    if (localSession) return;
+    // Close signalling entirely; local sessions do not exchange any data.
+    cleanupConnection();
+    localSession = true;
+    resetTherapist();
+    $('onlineSessionBox').classList.add('hidden');
+    $('onlineInstructions').classList.add('hidden');
+    $('localSetup').classList.remove('hidden');
+    localStereoConfirmed = false;
+    localLeftTested = false;
+    localRightTested = false;
+    stereoConfirmed = false;
+    $('localVerified').checked = false;
+    $('localVerified').disabled = true;
+    $('localAudioStatus').textContent = 'Prueba primero ambos oídos y confirma la separación estéreo.';
+    history.replaceState({}, '', location.pathname + '?role=therapist&mode=presencial');
+    renderLocalStatus();
+  }
+
+  function enterOnlineMode() {
+    if (!localSession) return;
+    stopPatientAudio();
+    localSession = false;
+    localStereoConfirmed = false;
+    stereoConfirmed = false;
+    $('onlineSessionBox').classList.remove('hidden');
+    $('onlineInstructions').classList.remove('hidden');
+    $('localSetup').classList.add('hidden');
+    $('play').disabled = true;
+    resetTherapist();
+    renderLocalStatus();
+    startTherapist(makeCode());
+  }
+
+  function checkLocalStereo(side) {
+    if (!localSession || running) return;
+    if (side === 'left') localLeftTested = true;
+    else localRightTested = true;
+    const both = localLeftTested && localRightTested;
+    $('localVerified').disabled = !both;
+    $('localAudioStatus').textContent = both
+      ? 'Dos canales comprobados. Confirma solo si los oyes por separado.'
+      : 'Prueba también el otro oído.';
+  }
+
   function startTherapist(code) {
+    localSession = false;
     role = 'therapist';
     session = sanitizeCode(code || makeCode()) || makeCode();
     showScreen('therapist');
+    $('onlineSessionBox').classList.remove('hidden');
+    $('onlineInstructions').classList.remove('hidden');
+    $('localSetup').classList.add('hidden');
+    renderLocalStatus();
     history.replaceState({}, '', location.pathname + '?role=therapist&session=' + encodeURIComponent(session));
 
     $('sessionCode').textContent = session;
@@ -451,6 +542,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
       elapsed = DURATION_MS;
       running = false;
       completed = true;
+      if (localSession) stopPatientAudio();
       sendSnapshot();
       $('play').textContent = 'Repetir';
     }
@@ -470,15 +562,25 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     }
   }
 
-  function startTherapistRun() {
-    if (!connected) return;
+  async function startTherapistRun() {
+    if (localSession) {
+      if (!localStereoConfirmed) return;
+      try {
+        await ensureAudio();
+      } catch (_) {
+        $('localAudioStatus').textContent = 'El móvil no ha podido activar el audio.';
+        return;
+      }
+      if (!localSession) return;
+    } else if (!connected) return;
     if (completed || elapsed >= DURATION_MS) {
       elapsed = 0; completed = false;
     }
     running = true;
     startedAtEpoch = Date.now();
     $('play').textContent = 'Pausar';
-    sendSnapshot();
+    if (localSession) startPatientAudio(elapsed, modeKey);
+    else sendSnapshot();
     cancelAnimationFrame(raf);
     renderTherapist();
   }
@@ -488,7 +590,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     elapsed = therapistElapsed();
     running = false;
     $('play').textContent = 'Continuar';
-    if (notify) sendSnapshot();
+    if (localSession) stopPatientAudio();
+    else if (notify) sendSnapshot();
     cancelAnimationFrame(raf);
     renderTherapist();
   }
@@ -497,11 +600,36 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     running = false; completed = false; elapsed = 0;
     $('play').textContent = 'Iniciar';
     cancelAnimationFrame(raf);
-    sendSnapshot();
+    if (localSession) stopPatientAudio();
+    else sendSnapshot();
     renderTherapist();
   }
 
   $('play').addEventListener('click', () => running ? pauseTherapist(true) : startTherapistRun());
+  $('localMode').addEventListener('click', enterLocalMode);
+  $('onlineMode').addEventListener('click', enterOnlineMode);
+  $('localTestLeft').addEventListener('click', async () => {
+    if (!localSession || running) return;
+    try { await ensureAudio(); oneShot('left'); checkLocalStereo('left'); }
+    catch (_) { $('localAudioStatus').textContent = 'No se pudo reproducir la prueba izquierda.'; }
+  });
+  $('localTestRight').addEventListener('click', async () => {
+    if (!localSession || running) return;
+    try { await ensureAudio(); oneShot('right'); checkLocalStereo('right'); }
+    catch (_) { $('localAudioStatus').textContent = 'No se pudo reproducir la prueba derecha.'; }
+  });
+  $('localVerified').addEventListener('change', () => {
+    localStereoConfirmed = localLeftTested && localRightTested && $('localVerified').checked;
+    stereoConfirmed = localStereoConfirmed;
+    renderLocalStatus();
+  });
+  $('localVolume').addEventListener('input', () => {
+    const value = Number($('localVolume').value);
+    $('volume').value = value;
+    $('volumeValue').textContent = value + '%';
+    $('localVolumeValue').textContent = value + '%';
+    if (masterGain && audioCtx) masterGain.gain.setTargetAtTime(value / 100, audioCtx.currentTime, 0.015);
+  });
   $('reset').addEventListener('click', resetTherapist);
   $('mode').addEventListener('change', () => {
     modeKey = $('mode').value;
@@ -512,7 +640,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     if (role !== 'therapist') return;
     if (e.code === 'Space' && !e.repeat && !e.target.matches('select,input,button')) {
       e.preventDefault();
-      if (!connected) return;
+      if (!(localSession ? localStereoConfirmed : connected)) return;
       running ? pauseTherapist(true) : startTherapistRun();
     }
     if (e.code === 'KeyR' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.target.matches('input')) {
@@ -792,7 +920,11 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   if (initialRole === 'patient' && initialSession) {
     connectPatient(initialSession);
   } else if (initialRole === 'therapist') {
-    startTherapist(initialSession || makeCode());
+    if (qp.get('mode') === 'presencial') {
+      role = 'therapist';
+      showScreen('therapist');
+      enterLocalMode();
+    } else startTherapist(initialSession || makeCode());
   } else {
     showScreen('home');
   }
