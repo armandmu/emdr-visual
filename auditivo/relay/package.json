@@ -1,0 +1,16 @@
+{
+  "name": "emdr-command-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Command-only, non-WebRTC relay for EMDR audio control",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "8.18.3"
+  }
+}
