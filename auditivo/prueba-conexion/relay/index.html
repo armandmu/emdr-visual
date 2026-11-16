@@ -266,7 +266,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     </div>
   </section>
 
-  <div class="brandmark" aria-label="Ángel Rull Psicólogo"><img src="../../assets/logo-angel-rull.png" alt=""><span class="brand-ar" aria-hidden="true">AR</span></div>
+  <div class="brandmark" aria-label="Ángel Rull Psicólogo"><img src="../../../assets/logo-angel-rull.png" alt=""><span class="brand-ar" aria-hidden="true">AR</span></div>
 </main>
 
 <script src="../../relay/client.js"></script>
@@ -408,8 +408,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
         diagnostic(which, 'Aviso de 17 s: no se ha establecido el canal. Revisar los eventos anteriores; este aviso no identifica por sí solo un bloqueo de red.');
       } else {
         diagnostic(which, peer && peer.open
-          ? 'Aviso de 17 s: sesión registrada en PeerJS, pero ningún paciente ha abierto el canal de datos.'
-          : 'Aviso de 17 s: todavía no se ha confirmado el registro del psicólogo en PeerJS.');
+          ? 'Aviso de 17 s: sesión registrada en el servidor WebSocket, pero ningún paciente ha abierto el canal de órdenes.'
+          : 'Aviso de 17 s: todavía no se ha confirmado el registro del psicólogo en el servidor WebSocket.');
       }
     }, CONNECTION_WAIT_MS);
   }
@@ -530,7 +530,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 
     if (typeof Peer === 'undefined') {
       setStep('therapist', 'Servidor WebSocket', 'fail');
-      diagnostic('therapist','No está disponible la librería PeerJS. Comprueba si un bloqueador impide cargarla.');
+      diagnostic('therapist','No está disponible el adaptador WebSocket. Comprueba si el navegador puede descargarlo.');
       updateTherapistConnection('No se ha podido cargar el servicio de conexión.', '');
       return;
     }
@@ -540,7 +540,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     peer.on('open', () => {
       updateTherapistConnection('Sesión lista · esperando al paciente…', 'warn');
       setStep('therapist','Servidor WebSocket','ok');
-      diagnostic('therapist','Servidor WebSocket conectado. ID de la sesión registrado. Esperando a que el paciente pulse «Activar audio y conectar».');
+      diagnostic('therapist','Servidor WebSocket conectado. Sesión registrada. Esperando al paciente.');
     });
     peer.on('disconnected', () => {
       if (role !== 'therapist') return;
@@ -863,7 +863,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 
     if (typeof Peer === 'undefined') {
       setStep('patient','Servidor WebSocket','fail');
-      diagnostic('patient','No está disponible la librería PeerJS.');
+      diagnostic('patient','No está disponible el adaptador WebSocket.');
       updatePatientConnection('No se ha podido cargar el servicio de conexión', '');
       return;
     }
@@ -872,7 +872,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 
     peer.on('open', () => {
       setStep('patient','Servidor WebSocket','ok');
-      diagnostic('patient','Servidor WebSocket conectado. Buscando la sesión indicada y negociando canal retransmitido…');
+      diagnostic('patient','Servidor WebSocket conectado. Buscando la sesión indicada…');
       conn = peer.connect(therapistPeerId(session), { reliable: true, metadata: { role: 'patient' } });
       diagnostic('patient','Solicitada inscripción en la sala del psicólogo. El servidor confirmará si la sala existe.');
       watchRTC('patient',conn);
