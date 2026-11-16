@@ -29,10 +29,10 @@ button:focus-visible,select:focus-visible{outline:3px solid white;outline-offset
 <body>
 <main id="app">
   <div class="stage" id="stage" aria-label="Área de seguimiento visual"><div class="ball" id="ball"></div></div>
-  <div class="status" id="status" role="status" aria-live="off">Listo · Rápida 1,7× · 60:00</div>
+  <div class="status" id="status" role="status" aria-live="off">Listo · Rápida 2,5× · 60:00</div>
   <div class="controls" id="controls">
     <select id="mode" aria-label="Velocidad de estimulación">
-      <option value="fast">Rápida · 1,7×</option>
+      <option value="fast">Rápida · 2,5×</option>
       <option value="slow">Lenta · 0,8×</option>
     </select>
     <button class="primary" id="play">Iniciar</button>
@@ -47,7 +47,7 @@ button:focus-visible,select:focus-visible{outline:3px solid white;outline-offset
   'use strict';
   const DURATION_MS = 60 * 60 * 1000;
   const MODES = {
-    fast: { label: 'Rápida 1,7×', cyclesPerMs: 20.5 / 31000 },
+    fast: { label: 'Rápida 2,5×', cyclesPerMs: 30 / 31000 },
     slow: { label: 'Lenta 0,8×', cyclesPerMs: 4 / (31000 * 4 / (12 * 0.8)) }
   };
 
