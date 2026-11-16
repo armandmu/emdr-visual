@@ -32,8 +32,12 @@ button:focus-visible,select:focus-visible{outline:3px solid white;outline-offset
   <div class="status" id="status" role="status" aria-live="off">Listo · Rápida 2,5× · 60:00</div>
   <div class="controls" id="controls">
     <select id="mode" aria-label="Velocidad de estimulación">
-      <option value="fast">Rápida · 2,5×</option>
-      <option value="slow">Lenta · 0,8×</option>
+      <option value="0.8">Lenta · 0,8×</option>
+      <option value="1">Normal · 1×</option>
+      <option value="1.5">1,5×</option>
+      <option value="2">2×</option>
+      <option value="2.25">2,25×</option>
+      <option value="2.5" selected>Rápida · 2,5×</option>
     </select>
     <button class="primary" id="play">Iniciar</button>
     <button id="reset">Reiniciar</button>
@@ -47,8 +51,12 @@ button:focus-visible,select:focus-visible{outline:3px solid white;outline-offset
   'use strict';
   const DURATION_MS = 60 * 60 * 1000;
   const MODES = {
-    fast: { label: 'Rápida 2,5×', cyclesPerMs: 30 / 31000 },
-    slow: { label: 'Lenta 0,8×', cyclesPerMs: 4 / (31000 * 4 / (12 * 0.8)) }
+    '0.8': { label: '0,8×', cyclesPerMs: 12 * 0.8 / 31000 },
+    '1': { label: '1×', cyclesPerMs: 12 / 31000 },
+    '1.5': { label: '1,5×', cyclesPerMs: 12 * 1.5 / 31000 },
+    '2': { label: '2×', cyclesPerMs: 12 * 2 / 31000 },
+    '2.25': { label: '2,25×', cyclesPerMs: 12 * 2.25 / 31000 },
+    '2.5': { label: '2,5×', cyclesPerMs: 12 * 2.5 / 31000 }
   };
 
   const ball = document.getElementById('ball');
@@ -60,7 +68,9 @@ button:focus-visible,select:focus-visible{outline:3px solid white;outline-offset
   const reset = document.getElementById('reset');
   const fullscreen = document.getElementById('fullscreen');
 
-  let config = MODES.fast;
+  let config = MODES["2.5"];
+  let phaseCycles = 0;
+  let phaseElapsed = 0;
   let elapsed = 0;
   let startedAt = 0;
   let running = false;
@@ -77,7 +87,7 @@ button:focus-visible,select:focus-visible{outline:3px solid white;outline-offset
 
   function draw() {
     const safeWidth = Math.max(0, stage.clientWidth - ball.offsetWidth - 28);
-    const normalizedX = completed ? 0 : Math.sin(2 * Math.PI * config.cyclesPerMs * elapsed);
+    const normalizedX = completed ? 0 : Math.sin(2 * Math.PI * (phaseCycles + config.cyclesPerMs * (elapsed - phaseElapsed)));
     ball.style.left = (stage.clientWidth / 2 + normalizedX * safeWidth / 2) + 'px';
     status.textContent = completed
       ? 'Sesión terminada · ' + config.label
@@ -136,6 +146,8 @@ button:focus-visible,select:focus-visible{outline:3px solid white;outline-offset
     running = false;
     completed = false;
     elapsed = 0;
+    phaseCycles = 0;
+    phaseElapsed = 0;
     cancelAnimationFrame(raf);
     play.textContent = 'Iniciar';
     showControls();
@@ -143,8 +155,11 @@ button:focus-visible,select:focus-visible{outline:3px solid white;outline-offset
   }
 
   mode.addEventListener('change', () => {
+    if (running) elapsed = Math.min(total(), performance.now() - startedAt);
+    phaseCycles += config.cyclesPerMs * (elapsed - phaseElapsed);
+    phaseElapsed = elapsed;
     config = MODES[mode.value];
-    doReset();
+    draw();
   });
   play.addEventListener('click', toggle);
   reset.addEventListener('click', doReset);
