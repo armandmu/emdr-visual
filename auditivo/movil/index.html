@@ -262,7 +262,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   <div class="brandmark" aria-label="Ángel Rull Psicólogo"><img src="../../assets/logo-angel-rull.png" alt=""><span class="brand-ar" aria-hidden="true">AR</span></div>
 </main>
 
-<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.js"></script>
+<script src="../supabase-transport.js"></script>
 <script>
 (() => {
   'use strict';
@@ -276,6 +277,14 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   const $ = id => document.getElementById(id);
   const home = $('home'), therapist = $('therapist'), patient = $('patient'), backBtn = $('backBtn');
   const qp = new URLSearchParams(location.search);
+
+  // Mismo transporte de órdenes Supabase ya probado en /auditivo/.
+  // El modo presencial no abre conexión remota: reproduce en este dispositivo.
+  const Peer = window.EMDRSupabasePeer;
+  if (Peer) {
+    Peer.url = 'https://kncspghztadiwozraigq.supabase.co';
+    Peer.key = 'sb_publishable_pxyPLl3Eudj1bttt9amHdQ_c71Nl7pt';
+  }
 
   let peer = null;
   let conn = null;
