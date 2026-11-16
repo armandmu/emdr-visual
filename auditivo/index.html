@@ -124,6 +124,21 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
       <div class="eyebrow">EMDR · Herramienta online</div>
       <h1>Estimulación auditiva bilateral</h1>
       <p>El sonido se reproduce directamente en los auriculares del paciente. El profesional controla la estimulación desde su propio dispositivo.</p>
+      <div class="session-box" id="transportSettings">
+        <div class="muted" style="margin-bottom:8px">Sistema de conexión</div>
+        <select id="transportChoice" aria-label="Sistema de conexión" style="width:100%">
+          <option value="peerjs">PeerJS · conexión directa (original)</option>
+          <option value="supabase">Supabase Realtime · servidor (experimental)</option>
+        </select>
+        <div id="supabaseSettings" class="hidden" style="margin-top:14px">
+          <p class="muted">Pruebas técnicas únicamente. No utilices sesiones reales hasta validar permisos, privacidad y estabilidad. Requiere un proyecto Supabase independiente configurado.</p>
+          <label for="sbUrl" class="muted">URL de Supabase</label>
+          <input id="sbUrl" type="text" style="width:100%;margin:6px 0 10px;border-radius:10px" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://tu-proyecto.supabase.co">
+          <label for="sbKey" class="muted">Clave pública (publishable o anon; nunca secret/service_role)</label>
+          <input id="sbKey" type="text" style="width:100%;margin:6px 0 10px;border-radius:10px" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sb_publishable_…">
+          <div class="muted" id="sbHelp" role="status">Esta configuración se incorpora al enlace que compartas con el dispositivo de prueba.</div>
+        </div>
+      </div>
       <div class="role-grid">
         <button class="role" id="therapistRole">
           <strong>Soy psicólogo</strong>
@@ -235,6 +250,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 </main>
 
 <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0"></script>
+<script src="../supabase-transport.js"></script>
 <script>
 (() => {
   'use strict';
@@ -248,6 +265,36 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   const $ = id => document.getElementById(id);
   const home = $('home'), therapist = $('therapist'), patient = $('patient'), backBtn = $('backBtn');
   const qp = new URLSearchParams(location.search);
+  const transportChoice = $('transportChoice');
+  const transportMode = qp.get('transport') === 'supabase' ? 'supabase' : 'peerjs';
+  const supabaseUrl = qp.get('sburl') || '';
+  const supabaseKey = qp.get('sbkey') || '';
+  transportChoice.value = transportMode;
+  $('sbUrl').value = supabaseUrl;
+  $('sbKey').value = supabaseKey;
+  $('supabaseSettings').classList.toggle('hidden',transportMode!=='supabase');
+  const testMode = transportMode === 'supabase';
+  const testConfigValid = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl)
+    && /^(sb_publishable_[\w-]+|eyJ[\w.-]+)$/.test(supabaseKey);
+  const Peer = testMode ? window.EMDRSupabasePeer : window.Peer;
+  if(testMode && Peer){Peer.url=supabaseUrl;Peer.key=supabaseKey;}
+  function updateTransportConfig(){
+    const params=new URLSearchParams();
+    if(transportChoice.value==='supabase'){
+      params.set('transport','supabase');
+      const url=$('sbUrl').value.trim().replace(/\/$/,'');
+      const key=$('sbKey').value.trim();
+      if(url)params.set('sburl',url);
+      if(key)params.set('sbkey',key);
+    }
+    location.href=location.pathname+(params.toString()?'?'+params.toString():'');
+  }
+  transportChoice.addEventListener('change',updateTransportConfig);
+  $('sbUrl').addEventListener('change',updateTransportConfig);
+  $('sbKey').addEventListener('change',updateTransportConfig);
+  $('sbHelp').textContent=testConfigValid
+    ? 'Configuración detectada. Recuerda que esta modalidad solo está autorizada para pruebas técnicas.'
+    : 'Falta URL o clave pública válida de un proyecto Supabase dedicado.';
 
   let peer = null;
   let conn = null;
@@ -290,6 +337,11 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     return Array.from(bytes, b => chars[b % chars.length]).join('');
   }
 
+  function shareQuery(roleName,code){
+    const query=new URLSearchParams({role:roleName,session:code});
+    if(testMode){query.set('transport','supabase');query.set('sburl',supabaseUrl);query.set('sbkey',supabaseKey);}
+    return '?'+query.toString();
+  }
   function therapistPeerId(code) {
     return 'emdr-audio-' + code.toLowerCase();
   }
@@ -371,10 +423,10 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     role = 'therapist';
     session = sanitizeCode(code || makeCode()) || makeCode();
     showScreen('therapist');
-    history.replaceState({}, '', location.pathname + '?role=therapist&session=' + encodeURIComponent(session));
+    history.replaceState({}, '', location.pathname + shareQuery('therapist',session));
 
     $('sessionCode').textContent = session;
-    const patientUrl = location.origin + location.pathname + '?role=patient&session=' + encodeURIComponent(session);
+    const patientUrl = location.origin + location.pathname + shareQuery('patient',session);
     $('patientLink').textContent = patientUrl;
     $('copyCode').onclick = () => copyText(session, $('copyCode'));
     $('copyLink').onclick = () => copyText(patientUrl, $('copyLink'));
@@ -666,7 +718,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     if (!session) return;
 
     showScreen('patient');
-    history.replaceState({}, '', location.pathname + '?role=patient&session=' + encodeURIComponent(session));
+    history.replaceState({}, '', location.pathname + shareQuery('patient',session));
     $('patientSessionDisplay').textContent = session;
     $('patientPreConnect').classList.remove('hidden');
     $('patientConnected').classList.add('hidden');
@@ -737,11 +789,18 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     if (masterGain) masterGain.gain.setTargetAtTime(value / 100, audioCtx.currentTime, 0.015);
   });
 
-  $('therapistRole').addEventListener('click', () => startTherapist(makeCode()));
+  function canStartSession(){
+    if(!testMode)return true;
+    if(testConfigValid && Peer && window.supabase?.createClient)return true;
+    $('sbHelp').textContent = 'No puedo iniciar la prueba Supabase: falta configurar URL y clave pública de un proyecto dedicado, o no se cargó el cliente Supabase.';
+    showScreen('home');
+    return false;
+  }
+  $('therapistRole').addEventListener('click', () => {if(canStartSession())startTherapist(makeCode());});
   $('patientRole').addEventListener('click', () => $('patientCodeBox').classList.toggle('hidden'));
-  $('patientCodeGo').addEventListener('click', () => connectPatient($('patientCodeInput').value));
+  $('patientCodeGo').addEventListener('click', () => {if(canStartSession())connectPatient($('patientCodeInput').value)});
   $('patientCodeInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') connectPatient($('patientCodeInput').value);
+    if (e.key === 'Enter' && canStartSession()) connectPatient($('patientCodeInput').value);
   });
   $('patientCodeInput').addEventListener('input', e => e.target.value = sanitizeCode(e.target.value));
 
@@ -768,9 +827,9 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   const initialRole = qp.get('role');
   const initialSession = sanitizeCode(qp.get('session'));
 
-  if (initialRole === 'patient' && initialSession) {
+  if (initialRole === 'patient' && initialSession && canStartSession()) {
     connectPatient(initialSession);
-  } else if (initialRole === 'therapist') {
+  } else if (initialRole === 'therapist' && canStartSession()) {
     startTherapist(initialSession || makeCode());
   } else {
     showScreen('home');
