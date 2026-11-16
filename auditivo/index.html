@@ -234,8 +234,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   <div class="brandmark" aria-label="Ángel Rull Psicólogo"><img src="../assets/logo-angel-rull.png" alt=""><span class="brand-ar" aria-hidden="true">AR</span></div>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0"></script>
-<script src="../supabase-transport.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.js"></script>
+<script src="./supabase-transport.js"></script>
 <script>
 (() => {
   'use strict';
@@ -753,7 +753,7 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     if(testConfigValid) return true;
     const box = $('patientCodeBox');
     box.classList.remove('hidden');
-    $('patientCodeInput').placeholder = 'Error: no se cargó el servicio de conexión';
+    $('patientCodeInput').placeholder = 'No se pudo cargar la conexión; actualiza la página';
     return false;
   }
   $('therapistRole').addEventListener('click', () => {if(canStartSession())startTherapist(makeCode());});
