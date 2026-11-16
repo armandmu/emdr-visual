@@ -830,18 +830,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 
   window.addEventListener('beforeunload', cleanupConnection);
 
-  // A conservative gate: mobile phones and tablets cannot start sessions.
-  // Leave the tested desktop playback path untouched.
-  const mobileOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (mobileOrTablet) {
-    $('desktopOnly').classList.remove('hidden');
-    home.classList.add('hidden');
-    therapist.classList.add('hidden');
-    patient.classList.add('hidden');
-    backBtn.classList.add('hidden');
-    return;
-  }
+  // Diagnostic build: mobile browsers are allowed for cross-network testing.
+  // Production desktop restrictions remain unchanged.
 
   const initialRole = qp.get('role');
   const initialSession = sanitizeCode(qp.get('session'));
