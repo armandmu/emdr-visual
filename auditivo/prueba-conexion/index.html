@@ -104,6 +104,11 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   .actions button{flex:1}
   .brandmark{width:min(130px,34vw);right:12px;bottom:12px}
 }
+
+  .diag-stages{font-size:12px;display:grid;gap:5px;margin:10px 0;color:#d2dce9}
+  .diag-stages span{display:block;word-break:break-word}
+  .diag-actions{margin:9px 0}.diag-details{margin:10px 0}.diag-details summary{cursor:pointer;font-size:13px}
+  .diag-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.5;max-height:260px;overflow-y:auto;background:rgba(0,0,0,.17);border-radius:8px;padding:9px}
 </style>
 </head>
 <body>
@@ -151,8 +156,11 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
       <div class="statusbar"><span id="therapistDot" class="dot warn"></span><span id="therapistStatus">Preparando sesión…</span></div>
       <div class="session-box">
         <div class="muted">Diagnóstico de conexión</div>
-        <div id="therapistDiagnostics" role="status" style="font-size:13px;margin:8px 0;line-height:1.5">Esperando respuesta del servidor de señalización…</div>
-        <button id="therapistRetry" class="secondary">Crear otra sesión</button>
+        <div id="therapistConnectionStages" class="diag-stages" aria-label="Estado de la conexión"></div>
+        <div id="therapistDiagnostics" role="status" style="font-size:13px;margin:8px 0;line-height:1.5;white-space:pre-wrap">Esperando respuesta del servidor de señalización…</div>
+        <div class="diag-actions"><button id="therapistCopyReport" type="button" class="secondary">Copiar informe</button></div>
+          <details class="diag-details" open><summary>Historial completo de conexión</summary><pre id="therapistDiagnosticHistory">Sin eventos todavía.</pre></details>
+          <button id="therapistRetry" class="secondary">Crear otra sesión</button>
       </div>
 
       <div class="session-box">
@@ -213,7 +221,10 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
         <div class="statusbar" style="justify-content:center"><span id="patientDot" class="dot warn"></span><span id="patientStatus">Conectando…</span></div>
         <div class="session-box">
           <div class="muted">Diagnóstico de conexión</div>
-          <div id="patientDiagnostics" role="status" style="font-size:13px;margin:8px 0;line-height:1.5">Esperando respuesta del servidor…</div>
+          <div id="patientConnectionStages" class="diag-stages" aria-label="Estado de la conexión"></div>
+        <div id="patientDiagnostics" role="status" style="font-size:13px;margin:8px 0;line-height:1.5;white-space:pre-wrap">Esperando respuesta del servidor…</div>
+          <div class="diag-actions"><button id="patientCopyReport" type="button" class="secondary">Copiar informe</button></div>
+          <details class="diag-details" open><summary>Historial completo de conexión</summary><pre id="patientDiagnosticHistory">Sin eventos todavía.</pre></details>
           <button id="patientRetry" class="secondary">Reintentar conexión</button>
         </div>
 
@@ -285,9 +296,73 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   let monitorTimer = 0;
   let connectionTimeout = 0;
   const CONNECTION_WAIT_MS = 17000;
+  const diagnostics = { therapist: [], patient: [] };
+  const steps = { therapist: {}, patient: {} };
+  const STEP_NAMES = ['Servidor PeerJS', 'Sesión localizada', 'Canal WebRTC'];
+  let rtcWatchers = [];
+  function setStep(which, label, status) {
+    steps[which][label] = status;
+    const node = $(which + 'ConnectionStages');
+    if (!node) return;
+    node.replaceChildren();
+    for (const name of STEP_NAMES) {
+      const span = document.createElement('span');
+      span.textContent = (steps[which][name] === 'ok' ? '✓ ' : steps[which][name] === 'fail' ? '✕ ' : '○ ') + name + ': ' + (steps[which][name] === 'ok' ? 'confirmado' : steps[which][name] === 'fail' ? 'error' : 'sin confirmar');
+      node.appendChild(span);
+    }
+  }
   function diagnostic(which, msg) {
-    const target = $(which === 'therapist' ? 'therapistDiagnostics' : 'patientDiagnostics');
-    if (target) target.textContent = msg;
+    const line = new Date().toLocaleTimeString('es-ES', {hour12:false}) + ' · ' + msg;
+    diagnostics[which].push(line);
+    if (diagnostics[which].length > 100) diagnostics[which].shift();
+    const status = $(which + 'Diagnostics');
+    if (status) status.textContent = msg;
+    const historyNode = $(which + 'DiagnosticHistory');
+    if (historyNode) historyNode.textContent = diagnostics[which].join('\n');
+  }
+  function resetDiagnostics(which) {
+    diagnostics[which] = [];
+    steps[which] = {};
+    for (const label of STEP_NAMES) setStep(which, label, 'pending');
+    diagnostic(which, 'Nueva prueba iniciada. El historial conserva los eventos hasta reintentar.');
+  }
+  function report(which) {
+    return [
+      'EMDR - Informe de conexión (versión de diagnóstico)',
+      'Fecha: '+new Date().toLocaleString('es-ES'),
+      'Rol: '+(which === 'therapist'?'Psicólogo':'Paciente'),
+      'Navegador: '+navigator.userAgent,
+      'Etapas: '+STEP_NAMES.map(name=>name+'='+steps[which][name]).join(' | '),
+      'Historial (sin códigos de sesión ni direcciones IP):',
+      diagnostics[which].join('\n')
+    ].join('\n');
+  }
+  function watchRTC(which, link) {
+    let attempts = 0, attached = false;
+    const attach = () => {
+      const rtc = link && link.peerConnection;
+      if (!rtc || attached) return;
+      attached = true;
+      const log = () => {
+        diagnostic(which, 'WebRTC: conexión=' + rtc.connectionState + ', ICE=' + rtc.iceConnectionState + ', señalización=' + rtc.signalingState + ', recolección=' + rtc.iceGatheringState);
+        if (rtc.iceConnectionState === 'failed' || rtc.connectionState === 'failed') setStep(which, 'Canal WebRTC', 'fail');
+        if (rtc.connectionState === 'connected' || rtc.iceConnectionState === 'connected' || rtc.iceConnectionState === 'completed') setStep(which, 'Canal WebRTC', 'ok');
+      };
+      rtc.addEventListener('connectionstatechange', log);
+      rtc.addEventListener('iceconnectionstatechange', log);
+      rtc.addEventListener('signalingstatechange', log);
+      rtc.addEventListener('icegatheringstatechange', log);
+      log();
+    };
+    attach();
+    if (!attached) {
+      const interval = setInterval(() => {
+        attempts++;
+        attach();
+        if (attached || attempts >= 40) clearInterval(interval);
+      }, 250);
+      rtcWatchers.push(interval);
+    }
   }
   function clearConnectionWatchdog() { clearTimeout(connectionTimeout); connectionTimeout = 0; }
   function watchConnection(which) {
@@ -296,11 +371,11 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
       if (connected || role !== which) return;
       if (which === 'patient') {
         updatePatientConnection('No se ha podido conectar', 'warn');
-        diagnostic('patient','La conexión no se ha establecido en 17 segundos. Si el código coincide, podría haber un bloqueo de WebRTC en alguna de las redes. Prueba «Reintentar conexión».');
+        diagnostic(which, 'Aviso de 17 s: no se ha establecido el canal. Revisar los eventos anteriores; este aviso no identifica por sí solo un bloqueo de red.');
       } else {
-        diagnostic('therapist',peer && peer.open
-          ? 'El servidor reconoce esta sesión, pero no hay conexión con el paciente. Confirma que ha activado audio y que usa este enlace exacto.'
-          : 'El navegador no ha confirmado todavía la sesión en el servidor PeerJS. Comprueba la conexión a Internet y prueba «Crear otra sesión».');
+        diagnostic(which, peer && peer.open
+          ? 'Aviso de 17 s: sesión registrada en PeerJS, pero ningún paciente ha abierto el canal de datos.'
+          : 'Aviso de 17 s: todavía no se ha confirmado el registro del psicólogo en PeerJS.');
       }
     }, CONNECTION_WAIT_MS);
   }
@@ -337,6 +412,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     try { if (peer) peer.destroy(); } catch (_) {}
     conn = null; peer = null; connected = false;
     clearConnectionWatchdog();
+    rtcWatchers.forEach(clearInterval);
+    rtcWatchers = [];
     stopPatientAudio();
     stopTherapistMonitor();
     cancelAnimationFrame(raf);
@@ -412,10 +489,13 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     $('copyLink').onclick = () => copyText(patientUrl, $('copyLink'));
 
     updateTherapistConnection('Esperando al paciente…', 'warn');
+    resetDiagnostics('therapist');
     diagnostic('therapist','Iniciando comunicación con el servidor de señalización…');
     watchConnection('therapist');
 
     if (typeof Peer === 'undefined') {
+      setStep('therapist', 'Servidor PeerJS', 'fail');
+      diagnostic('therapist','No está disponible la librería PeerJS. Comprueba si un bloqueador impide cargarla.');
       updateTherapistConnection('No se ha podido cargar el servicio de conexión.', '');
       return;
     }
@@ -424,10 +504,12 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
 
     peer.on('open', () => {
       updateTherapistConnection('Sesión lista · esperando al paciente…', 'warn');
+      setStep('therapist','Servidor PeerJS','ok');
       diagnostic('therapist','Servidor PeerJS conectado. ID de la sesión registrado. Esperando a que el paciente pulse «Activar audio y conectar».');
     });
     peer.on('disconnected', () => {
       if (role !== 'therapist') return;
+      setStep('therapist','Servidor PeerJS','fail');
       diagnostic('therapist','Se ha perdido la conexión con el servidor de señalización.');
       if (!connected) updateTherapistConnection('Servidor desconectado', 'warn');
     });
@@ -437,10 +519,14 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
         try { conn.close(); } catch (_) {}
       }
       conn = incoming;
+      setStep('therapist','Sesión localizada','ok');
+      diagnostic('therapist','Solicitud de conexión recibida desde un paciente. Negociando el canal WebRTC.');
+      watchRTC('therapist', conn);
 
       conn.on('open', () => {
         connected = true;
         clearConnectionWatchdog();
+        setStep('therapist','Canal WebRTC','ok');
         diagnostic('therapist','Conexión WebRTC establecida con el paciente. Las órdenes viajan entre los navegadores.');
         updateTherapistConnection('Paciente conectado y listo', 'ok');
         sendSnapshot();
@@ -463,19 +549,22 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
         if (running) pauseTherapist(false);
       });
 
-      conn.on('error', () => {
+      conn.on('error', err => {
         connected = false;
-        diagnostic('therapist','PeerJS informa de un error en el canal WebRTC de datos.');
+        setStep('therapist','Canal WebRTC','fail');
+        diagnostic('therapist','Error en el canal de datos: '+(err?.type||err?.name||'desconocido')+' · '+(err?.message||''));
         updateTherapistConnection('Problema de conexión con el paciente', '');
       });
     });
 
     peer.on('error', err => {
       if (err && err.type === 'unavailable-id') {
+        diagnostic('therapist','El identificador de sesión ya está ocupado. Se genera otro.');
         cleanupConnection();
         startTherapist(makeCode());
         return;
       }
+      setStep('therapist','Servidor PeerJS','fail');
       diagnostic('therapist','Error de PeerJS: '+ (err && err.type ? err.type : 'desconocido') + '. ' + (err && err.message ? err.message : ''));
       updateTherapistConnection('No se ha podido establecer la conexión', '');
     });
@@ -733,10 +822,13 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     $('patientPreConnect').classList.add('hidden');
     $('patientConnected').classList.remove('hidden');
     updatePatientConnection('Conectando con el profesional…', 'warn');
+    resetDiagnostics('patient');
     diagnostic('patient','Conectando con el servidor PeerJS…');
     watchConnection('patient');
 
     if (typeof Peer === 'undefined') {
+      setStep('patient','Servidor PeerJS','fail');
+      diagnostic('patient','No está disponible la librería PeerJS.');
       updatePatientConnection('No se ha podido cargar el servicio de conexión', '');
       return;
     }
@@ -744,18 +836,17 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     peer = new Peer(undefined, { debug: 0 });
 
     peer.on('open', () => {
-      diagnostic('patient','Servidor PeerJS conectado. Buscando la sesión '+session+' y negociando WebRTC…');
+      setStep('patient','Servidor PeerJS','ok');
+      diagnostic('patient','Servidor PeerJS conectado. Buscando la sesión indicada y negociando WebRTC…');
       conn = peer.connect(therapistPeerId(session), { reliable: true, metadata: { role: 'patient' } });
-      const rtc = conn.peerConnection;
-      if (rtc && typeof rtc.addEventListener === 'function') {
-        rtc.addEventListener('iceconnectionstatechange', () => {
-          if (!connected) diagnostic('patient','Estado de la negociación de red (ICE): '+rtc.iceConnectionState);
-        });
-      }
+      diagnostic('patient','Solicitada conexión con el ID del psicólogo. Aún no se ha confirmado que el destinatario esté disponible.');
+      watchRTC('patient',conn);
 
       conn.on('open', () => {
         connected = true;
         clearConnectionWatchdog();
+        setStep('patient','Sesión localizada','ok');
+        setStep('patient','Canal WebRTC','ok');
         diagnostic('patient','Conexión WebRTC establecida. Ya puedes recibir las órdenes del psicólogo.');
         updatePatientConnection('Conectado · esperando indicaciones', 'ok');
         send({ type: 'audio-ready' });
@@ -771,22 +862,28 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
         updatePatientConnection('Conexión interrumpida', 'warn');
       });
 
-      conn.on('error', () => {
+      conn.on('error', err => {
         connected = false;
         clearConnectionWatchdog();
         stopPatientAudio();
-        diagnostic('patient','El canal WebRTC ha producido un error. Prueba «Reintentar conexión».');
+        setStep('patient','Canal WebRTC','fail');
+        diagnostic('patient','Error del canal WebRTC: '+(err?.type||err?.name||'desconocido')+' · '+(err?.message||''));
         updatePatientConnection('Problema de conexión', '');
       });
     });
 
     peer.on('disconnected', () => {
-      if (!connected) diagnostic('patient','Se perdió la conexión con el servidor de señalización.');
+      if (!connected) {
+        setStep('patient','Servidor PeerJS','fail');
+        diagnostic('patient','Se perdió la conexión con el servidor de señalización.');
+      }
     });
     peer.on('error', err => {
       connected = false;
       clearConnectionWatchdog();
       stopPatientAudio();
+      if (err && err.type === 'peer-unavailable') setStep('patient','Sesión localizada','fail');
+      else setStep('patient','Servidor PeerJS','fail');
       diagnostic('patient','Error de PeerJS: '+(err && err.type ? err.type : 'desconocido')+'. '+(err && err.message ? err.message : ''));
       if (err && err.type === 'peer-unavailable') {
         updatePatientConnection('No encuentro esa sesión. Comprueba el código o pide un enlace nuevo.', '');
@@ -796,6 +893,8 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
     });
   });
 
+  $('therapistCopyReport').addEventListener('click', () => copyText(report('therapist'), $('therapistCopyReport')));
+  $('patientCopyReport').addEventListener('click', () => copyText(report('patient'), $('patientCopyReport')));
   $('therapistRetry').addEventListener('click', () => {
     cleanupConnection();
     running = false; completed = false; elapsed = 0;
